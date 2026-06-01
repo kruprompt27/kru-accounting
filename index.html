@@ -400,7 +400,8 @@ function buildPeriod(){
   years.add(String(new Date().getFullYear()));
   const ys=[...years].sort().reverse();
   const sy=document.getElementById('selYear');
-  sy.innerHTML = ys.map(y=>`<option value="${y}">ปี ${(+y)+543}</option>`).join('');
+  sy.innerHTML = '<option value="all">รวมทั้งหมด</option>'+
+    ys.map(y=>`<option value="${y}">ปี ${(+y)+543}</option>`).join('');
   const sm=document.getElementById('selMonth');
   sm.innerHTML = '<option value="all">ทั้งปี</option>'+
     TH_MONTH.slice(1).map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('');
@@ -520,14 +521,25 @@ async function delTx(id){
 function inPeriod(t){
   const y=document.getElementById('selYear').value;
   const m=document.getElementById('selMonth').value;
+  if(y==='all') return true;                 // รวมทั้งหมดทุกปี
   if(t.date.slice(0,4)!==y) return false;
   if(m!=='all' && t.date.slice(5,7)!==m) return false;
   return true;
+}
+/* คืนค่าปีจริง (ถ้าเลือก "รวมทั้งหมด" ใช้ปีล่าสุดที่มีข้อมูล สำหรับแท็บที่ต้องอ้างอิงปีเดียว) */
+function resolveYear(){
+  const y=document.getElementById('selYear').value;
+  if(y!=='all') return y;
+  const ys=[...new Set(TX.map(t=>t.date.slice(0,4)).filter(Boolean))].sort();
+  return ys.length ? ys[ys.length-1] : String(new Date().getFullYear());
 }
 function sum(arr){return arr.reduce((s,t)=>s+t.amount,0);}
 
 /* ============ render router ============ */
 function renderAll(){
+  const allYears = document.getElementById('selYear').value==='all';
+  const sm=document.getElementById('selMonth');
+  sm.disabled = allYears; sm.style.opacity = allYears ? .45 : 1;
   const inP=TX.filter(inPeriod);
   if(state.view==='home') renderHome(inP);
   if(state.view==='list') renderList();
@@ -651,7 +663,7 @@ function repPerson(d){
     '<div class="note">ตัวเลข “รายรับ” ของแต่ละคน ใช้เป็นฐานยื่นภาษีของคนนั้นได้เลย</div></div>';
 }
 function repMonth(){
-  const y=document.getElementById('selYear').value;
+  const y=resolveYear();
   const rows=[];
   for(let m=1;m<=12;m++){
     const mm=String(m).padStart(2,'0');
@@ -687,7 +699,7 @@ function fillTaxPersons(){
 }
 function onExpMode(){ calcTax(); }
 function calcTax(){
-  const y=document.getElementById('selYear').value;
+  const y=resolveYear();
   const who=document.getElementById('taxPerson').value;
   const d=TX.filter(t=>t.date.slice(0,4)===y && (who==='__all'||t.person===who));
   const inc=sum(d.filter(t=>t.type==='รับ'));
