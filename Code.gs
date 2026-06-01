@@ -47,6 +47,9 @@ function api_(e) {
       case 'addSetting':      data = addSetting(body.type, body.value); break;
       case 'deleteSetting':   data = deleteSetting(body.type, body.value); break;
       case 'import':          data = importRows(body.rows || []); break;
+      case 'kvGet':           data = kvGet(body.key || p.key); break;
+      case 'kvSet':           data = kvSet(body.key, body.value); break;
+      case 'exportUrl':       data = getExportUrl(); break;
       default: return out.setContent(JSON.stringify({ ok: false, error: 'ไม่รู้จัก action: ' + action }));
     }
     return out.setContent(JSON.stringify({ ok: true, data: data }));
@@ -92,7 +95,14 @@ function setup_() {
     st.getRange(2,1,def.length,2).setValues(def);
     st.setFrozenRows(1);
   }
-  return { ss, tx, st };
+
+  let kv = ss.getSheetByName('KV');
+  if (!kv) {
+    kv = ss.insertSheet('KV');
+    kv.appendRow(['key','value']);
+    kv.setFrozenRows(1);
+  }
+  return { ss, tx, st, kv };
 }
 
 /** อ่านค่าตั้งค่า (หมวดหมู่ / บัญชี / คน) */
@@ -221,6 +231,29 @@ function getImageData(fileId) {
 function getFolder_() {
   const it = DriveApp.getFoldersByName(IMG_FOLDER);
   return it.hasNext() ? it.next() : DriveApp.createFolder(IMG_FOLDER);
+}
+
+/** เก็บค่า key-value (ใช้เก็บค่าลดหย่อนรายคน ฯลฯ) */
+function kvGet(key) {
+  const { kv } = setup_();
+  const d = kv.getDataRange().getValues();
+  for (let i = 1; i < d.length; i++) if (String(d[i][0]) === String(key)) return String(d[i][1] || '');
+  return '';
+}
+function kvSet(key, value) {
+  const { kv } = setup_();
+  const d = kv.getDataRange().getValues();
+  for (let i = 1; i < d.length; i++) {
+    if (String(d[i][0]) === String(key)) { kv.getRange(i + 1, 2).setValue(value); return true; }
+  }
+  kv.appendRow([key, value]);
+  return true;
+}
+
+/** ลิงก์ส่งออกทั้งไฟล์เป็น Excel */
+function getExportUrl() {
+  return 'https://docs.google.com/spreadsheets/d/' +
+         SpreadsheetApp.getActiveSpreadsheet().getId() + '/export?format=xlsx';
 }
 
 function formatDate_(d) {

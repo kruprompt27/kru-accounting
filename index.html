@@ -167,6 +167,13 @@ textarea{resize:vertical;min-height:52px;}
 .note.warn{background:#FFE0E0;}
 .empty{text-align:center;padding:30px 10px;opacity:.7;font-family:'Prompt';}
 .hide{display:none!important;}
+.ded-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:14px;}
+.ded-row>span{flex:1;}
+.ded-row input{width:120px;text-align:right;padding:7px 9px;font-size:14px;}
+#toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:90;background:var(--ink);color:#fff;
+  font-family:'Prompt',sans-serif;font-size:13px;padding:9px 16px;border-radius:12px;opacity:0;transition:opacity .25s;pointer-events:none;}
+#toast.show{opacity:1;}
+.trend-card{overflow-x:auto;}
 .center{text-align:center;}
 .spin{width:40px;height:40px;border:5px solid var(--ink);border-top-color:var(--pink);
   border-radius:50%;animation:sp 0.8s linear infinite;margin:30px auto;}
@@ -201,6 +208,8 @@ textarea{resize:vertical;min-height:52px;}
       <div class="stat out"><div class="lbl">รายจ่าย</div><div class="val" id="hOut">0</div></div>
       <div class="stat profit"><div class="lbl">กำไรสุทธิ</div><div class="val" id="hProfit">0</div></div>
     </div>
+    <div id="hCompare"></div>
+    <div id="hTaxAlert"></div>
     <div class="card">
       <h3 style="margin:0 0 10px;">แยกตามคน 👥</h3>
       <div id="hPerson"></div>
@@ -252,11 +261,18 @@ textarea{resize:vertical;min-height:52px;}
 
   <!-- ============ VIEW: LIST ============ -->
   <div id="view-list" class="hide">
+    <input id="listSearch" placeholder="🔍 ค้นหาจากหมายเหตุ/หมวดหมู่..." oninput="renderList()" style="margin-bottom:10px">
     <div class="seg-mini" id="listFilter">
       <div class="o on" data-f="all" onclick="setListFilter('all')">ทั้งหมด</div>
       <div class="o" data-f="รับ" onclick="setListFilter('รับ')">รายรับ</div>
       <div class="o" data-f="จ่าย" onclick="setListFilter('จ่าย')">รายจ่าย</div>
     </div>
+    <div style="display:flex;gap:7px;margin-bottom:10px">
+      <select id="fltCat" onchange="renderList()" style="font-size:13px;padding:7px 8px"></select>
+      <select id="fltAcc" onchange="renderList()" style="font-size:13px;padding:7px 8px"></select>
+      <select id="fltPer" onchange="renderList()" style="font-size:13px;padding:7px 8px"></select>
+    </div>
+    <div id="listCount" style="font-size:12px;opacity:.7;margin-bottom:6px"></div>
     <div id="listBox"></div>
   </div>
 
@@ -267,6 +283,7 @@ textarea{resize:vertical;min-height:52px;}
       <div class="o" data-r="acc"   onclick="setRep('acc')">บัญชี</div>
       <div class="o" data-r="person" onclick="setRep('person')">แยกคน</div>
       <div class="o" data-r="month" onclick="setRep('month')">รายเดือน</div>
+      <div class="o" data-r="trend" onclick="setRep('trend')">แนวโน้ม</div>
       <div class="o" data-r="year"  onclick="setRep('year')">รายปี</div>
     </div>
     <div id="repBox"></div>
@@ -279,7 +296,7 @@ textarea{resize:vertical;min-height:52px;}
       <div class="note">คิดภาษีเป็นรายบุคคล ใครหารายได้ก็ยื่นของตัวเอง เลือกคนและปีด้านล่าง</div>
 
       <label class="fl">คำนวณของ</label>
-      <select id="taxPerson" onchange="calcTax()"></select>
+      <select id="taxPerson" onchange="onTaxPersonChange()"></select>
 
       <label class="fl">รายได้ทั้งปี (จากข้อมูลในแอป)</label>
       <input type="number" id="taxIncome" oninput="calcTax()">
@@ -291,8 +308,18 @@ textarea{resize:vertical;min-height:52px;}
       </select>
       <input type="number" id="taxExpense" oninput="calcTax()" style="margin-top:8px;">
 
-      <label class="fl">ค่าลดหย่อนรวม (ส่วนตัว ฯลฯ)</label>
-      <input type="number" id="taxDeduct" value="60000" oninput="calcTax()">
+      <label class="fl">ค่าลดหย่อน (เก็บแยกรายคน)</label>
+      <div id="deductBox" style="border:2.5px solid var(--ink);border-radius:12px;padding:10px 12px;background:var(--paper)">
+        <div class="ded-row"><span>ส่วนตัว</span><input type="number" id="ded_personal" value="60000" oninput="sumDeduct()"></div>
+        <div class="ded-row"><span>ประกันสังคม</span><input type="number" id="ded_social" value="0" oninput="sumDeduct()"></div>
+        <div class="ded-row"><span>ประกันชีวิต/สุขภาพ</span><input type="number" id="ded_insure" value="0" oninput="sumDeduct()"></div>
+        <div class="ded-row"><span>กองทุน SSF/RMF/PVD</span><input type="number" id="ded_fund" value="0" oninput="sumDeduct()"></div>
+        <div class="ded-row"><span>บริจาค</span><input type="number" id="ded_donate" value="0" oninput="sumDeduct()"></div>
+        <div class="ded-row"><span>อื่นๆ</span><input type="number" id="ded_other" value="0" oninput="sumDeduct()"></div>
+        <div class="ded-row" style="border-top:2px dashed var(--ink);padding-top:7px;margin-top:5px"><b>รวมลดหย่อน</b><b id="dedTotal" style="text-align:right;flex:0 0 auto">60,000</b></div>
+      </div>
+      <button class="btn sky btn-sm" style="width:100%;margin-top:8px" onclick="saveDeduct()">💾 บันทึกค่าลดหย่อนของคนนี้</button>
+      <input type="hidden" id="taxDeduct" value="60000">
 
       <div class="card" style="background:var(--yellow);margin-top:14px;box-shadow:var(--shadow-sm);">
         <div style="display:flex;justify-content:space-between;"><span>เงินได้สุทธิ</span><b id="txNet">0</b></div>
@@ -316,6 +343,7 @@ textarea{resize:vertical;min-height:52px;}
 </div></div>
 
 <!-- MODALS -->
+<div id="toast"></div>
 <div class="modal" id="mImg" onclick="closeModal('mImg')">
   <div class="sheet" onclick="event.stopPropagation()">
     <h2>รูปแนบ</h2>
@@ -378,6 +406,7 @@ async function boot(){
     TX = await getTx();
     buildPeriod();
     fillChips();
+    fillFilters();
     fillTaxPersons();
     document.getElementById('fDate').value = today();
     setType('รับ');
@@ -544,7 +573,7 @@ function renderAll(){
   if(state.view==='home') renderHome(inP);
   if(state.view==='list') renderList();
   if(state.view==='report') renderReport(inP);
-  if(state.view==='tax') calcTax();
+  if(state.view==='tax') onTaxPersonChange();
 }
 
 /* ---- HOME ---- */
@@ -554,6 +583,9 @@ function renderHome(d){
   document.getElementById('hIn').textContent=baht(inc);
   document.getElementById('hOut').textContent=baht(out);
   document.getElementById('hProfit').textContent=baht(inc-out);
+
+  renderCompare(inc,out);
+  renderTaxAlert();
 
   // per person
   const ppl=[...new Set(d.map(t=>t.person).filter(Boolean))];
@@ -568,28 +600,103 @@ function renderHome(d){
   document.getElementById('hRecent').innerHTML = r.length? r.map(txCard).join('') : '<div class="empty">ยังไม่มีรายการในเดือนนี้</div>';
 }
 
+/* เทียบกับช่วงก่อนหน้า (เดือนก่อน หรือปีก่อน) */
+function renderCompare(inc,out){
+  const box=document.getElementById('hCompare');
+  const y=document.getElementById('selYear').value;
+  const m=document.getElementById('selMonth').value;
+  if(y==='all'){ box.innerHTML=''; return; }
+  let prevInc=0, prevOut=0, label='';
+  if(m!=='all'){
+    let py=+y, pm=+m-1; if(pm<1){pm=12;py--;}
+    const pys=String(py), pms=String(pm).padStart(2,'0');
+    const pd=TX.filter(t=>t.date.slice(0,4)===pys&&t.date.slice(5,7)===pms);
+    prevInc=sum(pd.filter(t=>t.type==='รับ')); prevOut=sum(pd.filter(t=>t.type==='จ่าย'));
+    label='เทียบ '+TH_MONTH[pm];
+  }else{
+    const pys=String(+y-1);
+    const pd=TX.filter(t=>t.date.slice(0,4)===pys);
+    prevInc=sum(pd.filter(t=>t.type==='รับ')); prevOut=sum(pd.filter(t=>t.type==='จ่าย'));
+    label='เทียบปี '+((+y-1)+543);
+  }
+  const profit=inc-out, pprofit=prevInc-prevOut;
+  if(prevInc===0&&prevOut===0){ box.innerHTML=''; return; }
+  box.innerHTML=`<div class="card" style="box-shadow:var(--shadow-sm)">
+    <div style="display:flex;justify-content:space-between;align-items:center"><b class="disp">${label}</b></div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      ${pill('รายรับ',inc,prevInc)}${pill('กำไร',profit,pprofit)}
+    </div></div>`;
+}
+function pill(name,now,prev){
+  const diff=now-prev, pct=prev?Math.round(diff/Math.abs(prev)*100):(now>0?100:0);
+  const up=diff>=0, color=up?'#3b8a00':'#d6256b', arrow=up?'▲':'▼';
+  return `<div style="flex:1;border:2.5px solid var(--ink);border-radius:12px;padding:8px 10px">
+    <div style="font-size:12px">${name}</div>
+    <div style="font-family:'Prompt';font-weight:700;font-size:15px">${baht(now)}</div>
+    <div style="font-size:12px;color:${color};font-weight:700">${arrow} ${Math.abs(pct)}%</div></div>`;
+}
+
+/* การ์ดเตือนภาษีรายคน (ประมาณการจากรายได้ทั้งปี) */
+function renderTaxAlert(){
+  const box=document.getElementById('hTaxAlert');
+  const y=resolveYear();
+  const ppl=[...new Set(TX.map(t=>t.person).filter(Boolean))];
+  if(!ppl.length){ box.innerHTML=''; return; }
+  const TH=525000; // เกณฑ์โดยประมาณ (หักเหมา 60% + ลดหย่อนส่วนตัว แล้วเริ่มเสียภาษี)
+  const rows=ppl.map(p=>{
+    const gi=sum(TX.filter(t=>t.date.slice(0,4)===y&&t.type==='รับ'&&t.person===p));
+    const pctw=Math.min(100, gi/TH*100);
+    const over=gi>TH;
+    const left=Math.max(0, TH-gi);
+    const color=over?'var(--pink)':(pctw>80?'var(--orange)':'var(--lime)');
+    const status=over?('เกินเกณฑ์ '+baht(gi-TH)+' — น่าจะต้องเสียภาษี'):('เหลืออีก '+baht(left)+' ก่อนถึงเกณฑ์');
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:14px"><b>${p}</b><span>${baht(gi)}</span></div>
+      <div class="bar-track" style="margin-top:4px"><div class="bar-fill" style="width:${Math.max(2,pctw)}%;background:${color}"></div></div>
+      <div style="font-size:12px;margin-top:3px;color:${over?'#d6256b':'#555'}">${status}</div></div>`;
+  }).join('');
+  box.innerHTML=`<div class="card" style="box-shadow:var(--shadow-sm)">
+    <h3 style="margin:0 0 10px">🧮 เกณฑ์ภาษี ปี ${(+y)+543} (ประมาณการ)</h3>${rows}
+    <div class="note" style="margin-top:2px">เส้นเกณฑ์ ~525,000 บาท/คน/ปี เป็นค่าประมาณเมื่อหักค่าใช้จ่ายแบบเหมา ดูละเอียดในแท็บภาษี</div></div>`;
+}
+
 /* ---- LIST ---- */
 function setListFilter(f){
   state.listFilter=f;
   document.querySelectorAll('#listFilter .o').forEach(o=>o.classList.toggle('on',o.dataset.f===f));
   renderList();
 }
+function fillFilters(){
+  const opt=(arr,first)=>`<option value="">${first}</option>`+arr.map(v=>`<option value="${v}">${v}</option>`).join('');
+  const cats=[...new Set([].concat(CFG.catIncome,CFG.catExpense))];
+  document.getElementById('fltCat').innerHTML=opt(cats,'ทุกหมวด');
+  document.getElementById('fltAcc').innerHTML=opt(CFG.account,'ทุกบัญชี');
+  document.getElementById('fltPer').innerHTML=opt(CFG.person,'ทุกคน');
+}
 function renderList(){
   let d=TX.filter(inPeriod);
   if(state.listFilter!=='all') d=d.filter(t=>t.type===state.listFilter);
+  const q=(document.getElementById('listSearch').value||'').trim().toLowerCase();
+  const fc=document.getElementById('fltCat').value, fa=document.getElementById('fltAcc').value, fp=document.getElementById('fltPer').value;
+  if(fc) d=d.filter(t=>t.category===fc);
+  if(fa) d=d.filter(t=>t.account===fa);
+  if(fp) d=d.filter(t=>t.person===fp);
+  if(q) d=d.filter(t=>((t.note||'')+' '+(t.category||'')).toLowerCase().indexOf(q)>=0);
+  const totIn=sum(d.filter(t=>t.type==='รับ')), totOut=sum(d.filter(t=>t.type==='จ่าย'));
+  document.getElementById('listCount').textContent=`${d.length} รายการ · รับ ${baht(totIn)} · จ่าย ${baht(totOut)}`;
   document.getElementById('listBox').innerHTML = d.length? d.map(txCard).join('') : '<div class="empty">ไม่มีรายการ</div>';
 }
 function txCard(t){
   const cls=t.type==='รับ'?'in':'out', sign=t.type==='รับ'?'+':'−';
-  return `<div class="tx">
+  return `<div class="tx" onclick="editTx('${t.id}')" style="cursor:pointer">
     <div class="dot ${cls}"></div>
     <div class="mid">
       <div class="cat">${t.category}${t.fileId?'<span class="badge">📎</span>':''}</div>
       <div class="meta">${fmtDate(t.date)} · ${t.account||'-'} · ${t.person||'-'}${t.note?' · '+t.note:''}</div>
       <div class="row-act">
-        ${t.fileId?`<button class="btn btn-sm sky" onclick="viewImg('${t.fileId}')">ดูรูป</button>`:''}
-        <button class="btn btn-sm yellow" onclick="editTx('${t.id}')">แก้ไข</button>
-        <button class="btn btn-sm pink" onclick="delTx('${t.id}')">ลบ</button>
+        ${t.fileId?`<button class="btn btn-sm sky" onclick="event.stopPropagation();viewImg('${t.fileId}')">ดูรูป</button>`:''}
+        <button class="btn btn-sm yellow" onclick="event.stopPropagation();editTx('${t.id}')">แก้ไข</button>
+        <button class="btn btn-sm pink" onclick="event.stopPropagation();delTx('${t.id}')">ลบ</button>
       </div>
     </div>
     <div class="amt ${cls}">${sign}${baht(t.amount)}</div>
@@ -615,12 +722,32 @@ function setRep(r){
 }
 function renderReport(d){
   const box=document.getElementById('repBox');
-  if(!d.length && state.rep!=='year' && state.rep!=='month'){ box.innerHTML='<div class="card empty">ไม่มีข้อมูลในช่วงนี้</div>'; return; }
+  if(!d.length && state.rep!=='year' && state.rep!=='month' && state.rep!=='trend'){ box.innerHTML='<div class="card empty">ไม่มีข้อมูลในช่วงนี้</div>'; return; }
   if(state.rep==='cat')    box.innerHTML=repByKey(d.filter(t=>t.type==='จ่าย'),'category','รายจ่ายแยกหมวดหมู่') + repByKey(d.filter(t=>t.type==='รับ'),'category','รายรับแยกหมวดหมู่');
   if(state.rep==='acc')    box.innerHTML=repByKey(d.filter(t=>t.type==='รับ'),'account','รายรับแยกบัญชี');
   if(state.rep==='person') box.innerHTML=repPerson(d);
   if(state.rep==='month')  box.innerHTML=repMonth();
+  if(state.rep==='trend')  box.innerHTML=repTrend();
   if(state.rep==='year')   box.innerHTML=repYear();
+}
+function repTrend(){
+  const y=resolveYear();
+  const inc=[],out=[];
+  for(let m=1;m<=12;m++){const mm=String(m).padStart(2,'0');const d=TX.filter(t=>t.date.slice(0,4)===y&&t.date.slice(5,7)===mm);
+    inc.push(sum(d.filter(t=>t.type==='รับ'))); out.push(sum(d.filter(t=>t.type==='จ่าย')));}
+  const maxV=Math.max(1,...inc,...out);
+  const W=640,H=240,padL=12,padR=12,padT=14,padB=26;
+  const ix=m=>padL+(W-padL-padR)*(m/11);
+  const iy=v=>padT+(H-padT-padB)*(1-v/maxV);
+  const line=(arr,color)=>{const pts=arr.map((v,m)=>ix(m)+','+iy(v)).join(' ');
+    return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round"/>`+
+      arr.map((v,m)=>`<circle cx="${ix(m)}" cy="${iy(v)}" r="3.5" fill="${color}" stroke="#1E1B16" stroke-width="1.5"/>`).join('');};
+  const labels=Array.from({length:12},(_,m)=>`<text x="${ix(m)}" y="${H-8}" font-size="11" text-anchor="middle" fill="#555">${m+1}</text>`).join('');
+  const svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:520px;height:auto;border:2.5px solid var(--ink);border-radius:12px;background:var(--cream)">
+    ${line(inc,'#3b8a00')}${line(out,'#d6256b')}${labels}</svg>`;
+  return `<div class="card"><h3 style="margin:0 0 10px">แนวโน้มรายเดือน ปี ${(+y)+543}</h3>
+    <div style="font-size:12px;margin-bottom:8px"><span style="color:#3b8a00;font-weight:700">●</span> รายรับ &nbsp; <span style="color:#d6256b;font-weight:700">●</span> รายจ่าย <span style="opacity:.6">(เลข 1–12 = เดือน)</span></div>
+    <div class="trend-card">${svg}</div></div>`;
 }
 function groupSum(arr,key){
   const m={}; arr.forEach(t=>{const k=t[key]||'ไม่ระบุ'; m[k]=(m[k]||0)+t.amount;});
@@ -693,9 +820,40 @@ function repYear(){
 }
 
 /* ============ TAX ============ */
+let DEDUCT={};
+const DED_FIELDS=['personal','social','insure','fund','donate','other'];
 function fillTaxPersons(){
   const opts=['<option value="__all">รวมทุกคน</option>'].concat(CFG.person.map(p=>`<option value="${p}">${p}</option>`));
   document.getElementById('taxPerson').innerHTML=opts.join('');
+}
+function sumDeduct(){
+  let s=0; DED_FIELDS.forEach(f=>{ s+=parseFloat(document.getElementById('ded_'+f).value)||0; });
+  document.getElementById('dedTotal').textContent=baht(s);
+  document.getElementById('taxDeduct').value=s;
+  calcTax();
+}
+function fillDeductFields(obj){
+  obj=obj||{};
+  document.getElementById('ded_personal').value = (obj.personal!=null?obj.personal:60000);
+  ['social','insure','fund','donate','other'].forEach(f=>{ document.getElementById('ded_'+f).value=(obj[f]!=null?obj[f]:0); });
+  sumDeduct();
+}
+async function onTaxPersonChange(){
+  const who=document.getElementById('taxPerson').value;
+  if(who==='__all'){ fillDeductFields({personal:60000}); return; }
+  if(DEDUCT[who]){ fillDeductFields(DEDUCT[who]); return; }
+  try{
+    const raw=await apiCall({action:'kvGet', key:'deduct:'+who});
+    let obj={}; try{ obj=JSON.parse(raw||'{}'); }catch(e){}
+    DEDUCT[who]=obj; fillDeductFields(obj);
+  }catch(e){ fillDeductFields({personal:60000}); }
+}
+async function saveDeduct(){
+  const who=document.getElementById('taxPerson').value;
+  if(who==='__all'){ toast('เลือกคนก่อนบันทึก'); return; }
+  const obj={}; DED_FIELDS.forEach(f=>{ obj[f]=parseFloat(document.getElementById('ded_'+f).value)||0; });
+  try{ await apiCall({action:'kvSet', key:'deduct:'+who, value:JSON.stringify(obj)}); DEDUCT[who]=obj; toast('บันทึกค่าลดหย่อนของ '+who+' แล้ว ✓'); }
+  catch(e){ toast('บันทึกไม่สำเร็จ'); }
 }
 function onExpMode(){ calcTax(); }
 function calcTax(){
@@ -731,23 +889,35 @@ function openSettings(){
     <div style="margin-top:8px">${arr.map(v=>`<div class="list-set">${v}<span class="x" onclick="delSet('${type}','${esc(v)}')">ลบ</span></div>`).join('')}</div>
     <div style="display:flex;gap:7px;margin-top:6px"><input id="add_${type}" placeholder="เพิ่มใหม่..."><button class="btn btn-sm lime" onclick="addSet('${type}')">+</button></div></div>`;
   document.getElementById('setBox').innerHTML=
+    '<div class="card" style="box-shadow:var(--shadow-sm)"><b class="disp">สำรองข้อมูล 💾</b>'+
+    '<div style="font-size:13px;margin:6px 0 8px">ดาวน์โหลดข้อมูลทั้งหมดเป็นไฟล์ Excel เก็บสำรองไว้ หรือส่งให้นักบัญชี</div>'+
+    '<button class="btn sky btn-sm" style="width:100%" onclick="downloadExcel()">📥 ดาวน์โหลด Excel</button></div>'+
     sec('หมวดหมู่รายรับ','catIncome',CFG.catIncome)+
     sec('หมวดหมู่รายจ่าย','catExpense',CFG.catExpense)+
     sec('บัญชีรับเงิน','account',CFG.account)+
     sec('คนทำ','person',CFG.person);
   show('mSet');
 }
+async function downloadExcel(){
+  try{ const url=await apiCall({action:'exportUrl'}); window.open(url,'_blank'); toast('กำลังเปิดไฟล์ Excel...'); }
+  catch(e){ toast('ส่งออกไม่สำเร็จ'); }
+}
 async function addSet(type){
   const el=document.getElementById('add_'+type); const v=el.value.trim(); if(!v)return;
-  CFG=await apiCall({action:'addSetting', type:type, value:v}); fillChips(); fillCatChips(); fillTaxPersons(); openSettings();
+  CFG=await apiCall({action:'addSetting', type:type, value:v}); fillChips(); fillCatChips(); fillFilters(); fillTaxPersons(); openSettings();
 }
 async function delSet(type,v){
-  CFG=await apiCall({action:'deleteSetting', type:type, value:v}); fillChips(); fillCatChips(); fillTaxPersons(); openSettings();
+  CFG=await apiCall({action:'deleteSetting', type:type, value:v}); fillChips(); fillCatChips(); fillFilters(); fillTaxPersons(); openSettings();
 }
 
 /* ============ modal utils ============ */
 function show(id){document.getElementById(id).classList.add('show');}
 function closeModal(id){document.getElementById(id).classList.remove('show');}
+let toastTimer;
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
+}
 
 /* ============ ลงทะเบียน Service Worker (ทำให้ติดตั้งเป็นแอปได้) ============ */
 if('serviceWorker' in navigator){
