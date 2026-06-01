@@ -429,8 +429,10 @@ function buildPeriod(){
   years.add(String(new Date().getFullYear()));
   const ys=[...years].sort().reverse();
   const sy=document.getElementById('selYear');
+  const cur=sy.value;
   sy.innerHTML = '<option value="all">รวมทั้งหมด</option>'+
     ys.map(y=>`<option value="${y}">ปี ${(+y)+543}</option>`).join('');
+  sy.value = (cur && [...sy.options].some(o=>o.value===cur)) ? cur : (ys[0]||'all');
   const sm=document.getElementById('selMonth');
   sm.innerHTML = '<option value="all">ทั้งปี</option>'+
     TH_MONTH.slice(1).map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('');
@@ -895,7 +897,8 @@ function openSettings(){
     sec('หมวดหมู่รายรับ','catIncome',CFG.catIncome)+
     sec('หมวดหมู่รายจ่าย','catExpense',CFG.catExpense)+
     sec('บัญชีรับเงิน','account',CFG.account)+
-    sec('คนทำ','person',CFG.person);
+    sec('คนทำ','person',CFG.person)+
+    '<div class="center" style="font-size:12px;opacity:.6;margin-top:4px">บัญชีเพจครูพร้อมสอน · เวอร์ชัน 1.2</div>';
   show('mSet');
 }
 async function downloadExcel(){
